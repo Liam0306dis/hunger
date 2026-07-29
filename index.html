@@ -118,11 +118,11 @@
     </div>
     <div class="table-wrap">
       <table id="result-table">
-        <thead><tr><th>Pet</th><th>Max hunger</th><th>Base lifetime</th><th>Drain /min</th><th>Expected restore /min</th><th>Expected net /min</th><th>From full</th></tr></thead>
+        <thead><tr><th>Pet</th><th>Max hunger</th><th>Base lifetime</th><th>Drain /min</th><th>Restores /hr</th><th>Restore hunger /min</th><th>Expected net /min</th><th>Estimated active time</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
-    <p class="method">Each species uses its own base hunger lifetime. Restore chance is converted to a check each second and can activate more than once per minute. Restore targets and amounts are random, so an average-positive team can still run dry during an unlucky streak. Calculations assume all selected pets remain active.</p>
+    <p class="method">Each species uses its own base hunger lifetime. Restore chance is converted to a check each second and can activate more than once per minute. A Restore pet cannot activate its ability at zero hunger, but an active Restore pet can target and revive a pet at zero. Restores per hour and uptime are averages while the listed Restore sources remain active, so unlucky streaks can perform worse.</p>
   </section>
 
   <section class="card">
@@ -266,22 +266,36 @@ function compute() {
     const ability = ABILITIES[key];
     return ability.type === 'restore' && abilityEnabled(row,key) ? abilitySum + activationRate(row,ability) : abilitySum;
   },0),0);
+  const restoreSourceCount = active.filter(row => row.abilities.some(key => {
+    const ability = ABILITIES[key];
+    return ability.type === 'restore' && abilityEnabled(row,key);
+  })).length;
   const noProcMinutes = remainingDrain > 0
     ? Math.min(...active.map(row => HUNGER_MINUTES[row.pet] / remainingDrain))
     : Infinity;
   const results = active.map(target => {
     const pet = findPet(target.pet);
+    const isRestoreSource = target.abilities.some(key => {
+      const ability = ABILITIES[key];
+      return ability.type === 'restore' && abilityEnabled(target,key);
+    });
     const baseLifetime = HUNGER_MINUTES[target.pet];
     const drain = pet.max / baseLifetime * remainingDrain;
-    const restore = active.reduce((sum,source) => sum + source.abilities.reduce((abilitySum,key) => {
+    const restoreStats = active.reduce((stats,source) => source.abilities.reduce((abilityStats,key) => {
       const ability = ABILITIES[key];
-      if (ability.type !== 'restore' || !abilityEnabled(source,key)) return abilitySum;
+      if (ability.type !== 'restore' || !abilityEnabled(source,key)) return abilityStats;
+      const hitsPerMinute = activationRate(source,ability) / active.length;
       const restoreCap = Math.floor(pet.max * ability.amount / 100 * source.str / 100);
       const averageRoll = restoreCap > 0 ? (restoreCap + 1) / 2 : 0;
-      return abilitySum + activationRate(source,ability) * averageRoll / active.length;
-    },0),0);
+      abilityStats.hits += hitsPerMinute;
+      abilityStats.hunger += hitsPerMinute * averageRoll;
+      return abilityStats;
+    },stats),{hits:0,hunger:0});
+    const restore = restoreStats.hunger;
     const net = restore - drain;
-    return {pet,baseLifetime,drain,restore,net,time:net < 0 ? pet.max / -net : Infinity};
+    const time = net < 0 ? pet.max / -net : Infinity;
+    const activeMinutesPerHour = drain > 0 ? Math.min(60,60 * restore / drain) : 60;
+    return {pet,baseLifetime,isRestoreSource,drain,restore,restoreHitsPerHour:restoreStats.hits*60,net,time,activeMinutesPerHour};
   });
 
   document.getElementById('boost-total').textContent = boostPercent.toFixed(1)+'%';
@@ -291,29 +305,45 @@ function compute() {
 
   const guaranteed = remainingDrain <= 0;
   const sustainable = results.every(result => result.net >= 0);
+  const failingRestoreSources = results.filter(result => result.isRestoreSource && result.net < 0);
   const status = document.getElementById('status');
   if (guaranteed) {
     status.className = 'status good';
     status.innerHTML = '<strong>Guaranteed not to lose hunger</strong><span>Hunger Boost has removed all base drain, so Restore luck is not needed.</span>';
+  } else if (failingRestoreSources.length) {
+    const firstFailure = Math.min(...failingRestoreSources.map(result => result.time));
+    status.className = 'status bad';
+    status.innerHTML = '<strong>Restore support is expected to lose an active source</strong><span>A Restore pet is projected to reach zero in about '+fmtTime(firstFailure)+'. Its ability then stops'+(restoreSourceCount > 1 ? ' until another active Restore pet revives it.' : ', leaving no Restore source to revive it.')+'</span>';
   } else if (sustainable) {
     status.className = 'status good';
-    status.innerHTML = '<strong>Sustainable on average</strong><span>Expected restoration is at least as high as drain for every pet. Random restore rolls mean this is not guaranteed forever.</span>';
+    status.innerHTML = '<strong>Sustainable on average</strong><span>Expected restoration is at least as high as drain for every pet. '+(restoreSourceCount === 1 ? 'If the lone Restore pet reaches zero during an unlucky streak, Restore support stops.' : restoreSourceCount > 1 ? 'An empty Restore pet can be revived while another Restore source remains active.' : 'No Restore abilities are active.')+'</span>';
   } else {
     status.className = 'status bad';
-    status.innerHTML = '<strong>Expected to run out of hunger</strong><span>At least one pet loses more hunger than the team restores on average.</span>';
+    status.innerHTML = '<strong>At least one pet is expected to run dry</strong><span>'+(restoreSourceCount ? 'A zero-hunger target can still receive Restore and become active again.' : 'There is no active Restore ability to revive it.')+'</span>';
   }
 
   const tbody = document.querySelector('#result-table tbody');
   tbody.innerHTML = results.map(result => {
     const netClass = result.net > 0 ? 'positive' : result.net < 0 ? 'negative' : 'neutral';
     const netText = (result.net > 0 ? '+' : '') + fmt(result.net);
+    let outcome = '~60 min/hr';
+    if (result.net < 0) {
+      if (result.isRestoreSource && restoreSourceCount === 1) {
+        outcome = '~'+fmtTime(result.time)+' total, then inactive';
+      } else if (restoreSourceCount) {
+        outcome = 'first empty ~'+fmtTime(result.time)+', then ~'+result.activeMinutesPerHour.toFixed(1)+' min/hr';
+      } else {
+        outcome = '~'+fmtTime(result.time)+' total, then inactive';
+      }
+    }
     return '<tr><td>'+result.pet.name+'</td>'+
       '<td data-label="Max hunger">'+result.pet.max.toLocaleString()+'</td>'+
       '<td data-label="Base lifetime">'+result.baseLifetime+'m</td>'+
       '<td data-label="Drain /min">'+fmt(result.drain)+'</td>'+
-      '<td data-label="Expected restore /min">'+fmt(result.restore)+'</td>'+
+      '<td data-label="Restores /hr">'+result.restoreHitsPerHour.toFixed(2)+'</td>'+
+      '<td data-label="Restore hunger /min">'+fmt(result.restore)+'</td>'+
       '<td data-label="Expected net /min" class="'+netClass+'">'+netText+'</td>'+
-      '<td data-label="From full">'+fmtTime(result.time)+'</td></tr>';
+      '<td data-label="Estimated active time">'+outcome+'</td></tr>';
   }).join('');
 }
 
