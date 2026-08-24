@@ -122,7 +122,7 @@
         <tbody></tbody>
       </table>
     </div>
-    <p class="method">Each species uses its own base hunger lifetime. Restore chance is converted to a check each second and can activate more than once per minute. A Restore pet cannot activate its ability at zero hunger, but an active Restore pet can target and revive a pet at zero. Restores per hour and uptime are averages while the listed Restore sources remain active, so unlucky streaks can perform worse.</p>
+    <p class="method">Each species uses its own base hunger lifetime. Restore chance is converted to a check each second and can activate more than once per minute. A Restore pet cannot activate its ability at zero hunger, but an active Restore pet can target and revive a pet at zero. Each restore gives its full share of the target's bar, capped only by the room left in it. Restores per hour and uptime are averages while the listed Restore sources remain active, so unlucky streaks can perform worse.</p>
   </section>
 
   <section class="card">
@@ -286,10 +286,13 @@ function compute() {
       const ability = ABILITIES[key];
       if (ability.type !== 'restore' || !abilityEnabled(source,key)) return abilityStats;
       const hitsPerMinute = activationRate(source,ability) / active.length;
-      const restoreCap = Math.floor(pet.max * ability.amount / 100 * source.str / 100);
-      const averageRoll = restoreCap > 0 ? (restoreCap + 1) / 2 : 0;
+      // A proc restores its full share of the bar, not a random part of it. It is only ever cut
+      // short by the room left in the pet, which matters while a bar sits near full - and a bar
+      // only sits near full when restore is already out-pacing drain, where the answer comes out
+      // the same anyway. A draining pet is always further below full than one proc can fill.
+      const restoreAmount = Math.floor(pet.max * ability.amount / 100 * source.str / 100);
       abilityStats.hits += hitsPerMinute;
-      abilityStats.hunger += hitsPerMinute * averageRoll;
+      abilityStats.hunger += hitsPerMinute * restoreAmount;
       return abilityStats;
     },stats),{hits:0,hunger:0});
     const restore = restoreStats.hunger;
