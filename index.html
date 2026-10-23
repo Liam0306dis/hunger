@@ -177,7 +177,8 @@ const PETS = [
   {id:'Ostrich',name:'Ostrich',max:40000},{id:'FireHorse',name:'Fire Horse',max:200000},{id:'Butterfly',name:'Butterfly',max:25000},
   {id:'Peacock',name:'Peacock',max:100000},{id:'Capybara',name:'Capybara',max:150000},{id:'Bat',name:'Bat',max:300},
   {id:'Platypus',name:'Platypus',max:10000},{id:'ThunderWolf',name:'Thunder Wolf',max:150000},
-  {id:'Rooster',name:'Rooster',max:1000},{id:'RedFox',name:'Red Fox',max:75000},{id:'Phoenix',name:'Phoenix',max:300000}
+  {id:'Rooster',name:'Rooster',max:1000},{id:'RedFox',name:'Red Fox',max:75000},{id:'Phoenix',name:'Phoenix',max:300000},
+  {id:'Moth',name:'Moth',max:50000},{id:'Toad',name:'Toad',max:75000},{id:'Snake',name:'Snake',max:100000}
 ];
 
 const ABILITIES = {
@@ -186,11 +187,13 @@ const ABILITIES = {
   HungerRestoreIII:{name:'Hunger Restore III',type:'restore',chance:16,amount:40},
   HungerBoost:{name:'Hunger Boost I',type:'boost',refund:12},
   HungerBoostII:{name:'Hunger Boost II',type:'boost',refund:16},
+  HungerBoostIII:{name:'Hunger Boost III',type:'boost',refund:20},
   SnowyHungerBoost:{name:'Snow Hunger Boost',type:'boost',refund:30,weather:'frost'}
 };
 const PET_ABILITIES = {
   Dragonfly:['HungerRestore'], Cow:['HungerBoost'], Turtle:['HungerRestoreII','HungerBoostII'],
-  Stoat:['SnowyHungerBoost'], Pony:['HungerRestoreII'], RedFox:['HungerRestoreIII']
+  Stoat:['SnowyHungerBoost'], Pony:['HungerRestoreII'], RedFox:['HungerRestoreIII'],
+  Toad:['HungerBoostIII'], Snake:['HungerRestoreIII']
 };
 const HUNGER_MINUTES = {
   Worm:30, Snail:60, Bee:15, Chicken:60, Bunny:45, Dragonfly:15,
@@ -198,7 +201,8 @@ const HUNGER_MINUTES = {
   SnowFox:45, Stoat:60, WhiteCaribou:75, Pony:60, Sheep:60, Horse:75,
   Ostrich:45, FireHorse:90, Butterfly:30, Peacock:60, Capybara:60,
   Bat:30, Platypus:60, ThunderWolf:60,
-  Rooster:60, RedFox:45, Phoenix:90
+  Rooster:60, RedFox:45, Phoenix:90,
+  Moth:30, Toad:60, Snake:90
 };
 
 let frostActive = false;
